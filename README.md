@@ -19,7 +19,7 @@
    - Перейдите в [Yandex Cloud Console](https://console.cloud.yandex.ru/)
    - Создайте новую функцию в разделе "Cloud Functions"
    - Скопируйте код из `index.py` в редактор
-   - 
+     
 2. **Настройте расписание**
    - Отредактируйте словарь `schedule` в файле `schedule_list.py`
 
