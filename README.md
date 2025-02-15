@@ -1,7 +1,7 @@
 # Умное расписание для Яндекс.Алисы
 
 <p align="center">
-      <img src="https://github.com/user-attachments/assets/0d0a7b39-5ad0-44fa-a4cd-af10e460ae3c" alt="Project Logo" width="425">
+      <img src="https://github.com/user-attachments/assets/d3476f53-fb1f-4f91-84aa-765c46a9c858" alt="Project Logo" width="720">
 </p>
 
 Этот навык для Яндекс.Алисы помогает студентам отслеживать расписание занятий с автоматическим определением типа недели (числитель/знаменатель) и показывает актуальные пары на любой день.
