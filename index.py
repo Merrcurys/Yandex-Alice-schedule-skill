@@ -40,22 +40,20 @@ def handler(event, context):
         """Возвращает текущую пару или время до конца пары"""
         now_utc_plus3 = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
         current_time = now_utc_plus3.time()
-        pairs = schedule[day][week_type]
+        pairs = schedule.get(day, {}).get(week_type, [])
 
         # Проверяем каждую пару в расписании
         for pair in pairs:
-            start_time = datetime.datetime.strptime(
-                pair['начало'], '%H:%M').time()
-            end_time = datetime.datetime.strptime(
-                pair['конец'], '%H:%M').time()
+            start = datetime.datetime.strptime(pair['начало'], '%H:%M').time()
+            end = datetime.datetime.strptime(pair['конец'], '%H:%M').time()
 
             # Если текущее время попадает в интервал пары
-            if start_time <= current_time <= end_time:
-                time_left = end_time - now_utc_plus3.time()
-                minutes_left = int(time_left.total_seconds() // 60)
-                return f"Сейчас идет {pair['номер']}-я пара: {pair['пара']}. До конца {minutes_left} минут."
+            if start <= current_time <= end:
+                minutes_left = (datetime.datetime.combine(datetime.date.today(), end) -
+                                datetime.datetime.combine(datetime.date.today(), current_time)).seconds // 60
+                return f"Сейчас {pair['номер']}-я пара: {pair['пара']}. До конца {minutes_left} мин."
 
-        return "В данный момент никакая пара не идет."
+        return "Сейчас пар нет."
 
     def find_day_regex(user_input):
         """Поиск дня недели во вводе пользователя с использованием регулярных выражений"""
