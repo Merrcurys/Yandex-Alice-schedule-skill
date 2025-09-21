@@ -1,6 +1,6 @@
 import datetime
 import re
-from schedule_list import schedule
+from schedule_list import schedule, config
 
 DAYS = ['понедельник', 'вторник', 'среда',
         'четверг', 'пятница', 'суббота', 'воскресенье']
@@ -19,26 +19,89 @@ def handler(event, context):
 
     # Вспомогательные функции для работы с датами и расписанием
     def get_current_week_type():
-        """Определяет текущий тип недели (числитель/знаменатель) по ISO номеру недели"""
-        now_utc_plus3 = datetime.datetime.utcnow(
-        ) + datetime.timedelta(hours=3)  # Московское время
-        week_number = now_utc_plus3.date().isocalendar()[1]
-        return 'числитель' if week_number % 2 == 0 else 'знаменатель'
+        """Определяет текущий тип недели (числитель/знаменатель) по учебным неделям"""
+        now_utc_plus3 = (datetime.datetime.utcnow() +
+                         datetime.timedelta(hours=config['timezone_offset_hours']))
+        current_date = now_utc_plus3.date()
+
+        # Определяем начало учебного года
+        current_year = current_date.year
+        academic_year_start = datetime.date(
+            current_year,
+            config['academic_year_start_month'],
+            config['academic_year_start_day']
+        )
+
+        # Если сейчас до начала учебного года, то берем предыдущий учебный год
+        if current_date < academic_year_start:
+            academic_year_start = datetime.date(
+                current_year - 1,
+                config['academic_year_start_month'],
+                config['academic_year_start_day']
+            )
+
+        # Вычисляем количество недель с начала учебного года
+        days_since_start = (current_date - academic_year_start).days
+        academic_week_number = (days_since_start // 7) + 1
+
+        # Четные учебные недели - числитель, нечетные - знаменатель
+        return 'числитель' if academic_week_number % 2 == 0 else 'знаменатель'
+
+    def get_academic_week_info(date=None):
+        """Возвращает информацию об учебной неделе для отладки"""
+        if date is None:
+            now_utc_plus3 = (datetime.datetime.utcnow() +
+                             datetime.timedelta(hours=config['timezone_offset_hours']))
+            current_date = now_utc_plus3.date()
+        else:
+            current_date = date
+
+        current_year = current_date.year
+        academic_year_start = datetime.date(
+            current_year,
+            config['academic_year_start_month'],
+            config['academic_year_start_day']
+        )
+
+        if current_date < academic_year_start:
+            academic_year_start = datetime.date(
+                current_year - 1,
+                config['academic_year_start_month'],
+                config['academic_year_start_day']
+            )
+
+        days_since_start = (current_date - academic_year_start).days
+        academic_week_number = (days_since_start // 7) + 1
+        week_type = 'числитель' if academic_week_number % 2 == 0 else 'знаменатель'
+
+        # ISO неделя для сравнения
+        iso_week = current_date.isocalendar()[1]
+
+        return {
+            'date': current_date,
+            'academic_week': academic_week_number,
+            'week_type': week_type,
+            'iso_week': iso_week,
+            'academic_year_start': academic_year_start
+        }
 
     def get_current_day():
         """Возвращает текущий день недели на московском времени"""
-        now_utc_plus3 = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+        now_utc_plus3 = (datetime.datetime.utcnow() +
+                         datetime.timedelta(hours=config['timezone_offset_hours']))
         return DAYS[now_utc_plus3.weekday()]
 
     def get_day_by_offset(offset):
         """Возвращает день недели через смещение дней от текущей даты"""
-        now_utc_plus3 = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+        now_utc_plus3 = (datetime.datetime.utcnow() +
+                         datetime.timedelta(hours=config['timezone_offset_hours']))
         target_day = now_utc_plus3.date() + datetime.timedelta(days=offset)
         return DAYS[target_day.weekday()]
 
     def get_current_pair(day, week_type):
         """Возвращает текущую пару или время до конца пары"""
-        now_utc_plus3 = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+        now_utc_plus3 = (datetime.datetime.utcnow() +
+                         datetime.timedelta(hours=config['timezone_offset_hours']))
         current_time = now_utc_plus3.time()
         pairs = schedule.get(day, {}).get(week_type, [])
 
@@ -70,7 +133,7 @@ def handler(event, context):
 
         # Обработка при запуске навыка
         if user_input == "":
-            response["response"]["text"] = f"Привет! Это навык умное расписание. На какой день недели вам нужно расписание?"
+            response["response"]["text"] = f"На какой день нужно расписание?"
             return response
 
         # Определение типа недели по запросу
@@ -97,17 +160,24 @@ def handler(event, context):
 
         # Если день не найден
         if not day:
-            response["response"]["text"] = "Ой-ой, что-то я вас не поняла. Давайте попробуем снова."
+            response["response"]["text"] = "Я вас не поняла. Повторите еще раз."
             return response
 
         # Формирование ответа с расписанием
         pairs = schedule[day][week_type]
         if not pairs:
-            response["response"]["text"] = "Ура-ура! На этот день пар нет. Хорошо отдохните."
+            response["response"]["text"] = "Ура! На этот день пар нет. Хорошо отдохните."
             return response
 
-        response_text = f"Расписание на {day}. День начинается с {pairs[0]['номер']} пары.\n" + "\n".join(
-            [f"{p['номер']} пара - {p['пара']}" for p in pairs])
+        # Формируем расписание с разным форматом для первой и остальных пар
+        schedule_lines = []
+        for i, p in enumerate(pairs):
+            if i == 0:  # Первая пара
+                schedule_lines.append(f"{p['номер']}-я пара {p['пара']}")
+            else:  # Остальные пары
+                schedule_lines.append(f"{p['номер']}-я {p['пара']}")
+
+        response_text = f"Расписание на {day}.\n" + "\n".join(schedule_lines)
         response["response"]["text"] = response_text
 
     return response
